@@ -9,13 +9,12 @@
  */
 
 export interface Env {
-  // Example binding to KV. Learn more at https://developers.cloudflare.com/workers/runtime-apis/kv/
-  // MY_KV_NAMESPACE: KVNamespace;
-  //
+  SCRATCHCARD_KV: KVNamespace;
+  SCRATCHCARD_BUCKET: R2Bucket;
+
   // Example binding to Durable Object. Learn more at https://developers.cloudflare.com/workers/runtime-apis/durable-objects/
   // MY_DURABLE_OBJECT: DurableObjectNamespace;
   //
-  SCRATCHCARD_BUCKET: R2Bucket;
 }
 
 export default {
@@ -24,12 +23,22 @@ export default {
     env: Env,
     ctx: ExecutionContext
   ): Promise<Response> {
-    const image = await env.SCRATCHCARD_BUCKET.get("genbaneko.png");
-    if (!image) {
-      return new Response("Object Not Found", { status: 404 });
+    const imageName = "genbaneko.png";
+
+    let imageData = await env.SCRATCHCARD_KV.get(imageName, {
+      type: "arrayBuffer",
+    });
+    if (imageData == null) {
+      const image = await env.SCRATCHCARD_BUCKET.get(imageName);
+      if (!image) {
+        return new Response("Object Not Found", { status: 404 });
+      }
+      imageData = await image?.arrayBuffer();
+      ctx.waitUntil(
+        env.SCRATCHCARD_KV.put(imageName, imageData, { expirationTtl: 600 })
+      );
     }
 
-    return new Response(image.body);
-    //return new Response("Hello World!");
+    return new Response(imageData);
   },
 };
