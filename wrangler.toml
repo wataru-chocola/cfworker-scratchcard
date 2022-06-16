@@ -1,3 +1,8 @@
 name = "cfworker-scratchcard"
 main = "src/index.ts"
 compatibility_date = "2022-06-16"
+
+[[r2_buckets]]
+binding = 'SCRATCHCARD_BUCKET'
+bucket_name = 'scratchcard'
+preview_bucket_name = 'scratchcard'
