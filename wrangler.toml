@@ -11,3 +11,6 @@ preview_bucket_name = 'scratchcard'
 binding = "SCRATCHCARD_KV"
 id = "2fa0886c0bd648c09a2aadde66eea0fe"
 preview_id = "bfe2f5b12ae4439aa182af6ae385d09e"
+
+[site]
+bucket = "./spa/build"
