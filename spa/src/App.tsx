@@ -1,14 +1,36 @@
-import React from "react";
+import React, { MouseEvent } from "react";
 import "./App.css";
 
 function App() {
+  const [ws, setWS] = React.useState<WebSocket>();
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
+  //React.useEffect(() => {
+  //  const newWS = new WebSocket("ws:///ws-card");
+  //  setWS(newWS);
+  //  return () => newWS.close();
+  //}, [setWS]);
+
   React.useEffect(() => {
-    const removeMouseTracker = canvasRef?.current?.addEventListener(
-      "mousemove",
-      (e) => console.log(e)
-    );
-    return removeMouseTracker;
+    let scratching = false;
+    const mouseDownListener: EventListener = (e) => {
+      console.log(e);
+      scratching = true;
+    };
+    const mouseUpListener: EventListener = (e) => {
+      console.log(e);
+      if (scratching) {
+        scratching = false;
+      }
+    };
+    const mouseMoveTracker: EventListener = (e) => {
+      if (scratching) {
+        console.log(e);
+      }
+    };
+    canvasRef?.current?.addEventListener("mousedown", mouseDownListener);
+    canvasRef?.current?.addEventListener("mouseup", mouseUpListener);
+    canvasRef?.current?.addEventListener("mousemove", mouseMoveTracker);
   });
   return (
     <div className="App">
