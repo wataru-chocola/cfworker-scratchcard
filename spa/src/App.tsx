@@ -1,15 +1,20 @@
-import React, { MouseEvent } from "react";
+import React from "react";
 import "./App.css";
 
 function App() {
   const [ws, setWS] = React.useState<WebSocket>();
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
-  //React.useEffect(() => {
-  //  const newWS = new WebSocket("ws:///ws-card");
-  //  setWS(newWS);
-  //  return () => newWS.close();
-  //}, [setWS]);
+  React.useEffect(() => {
+    const url = new URL(window.location.href);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    url.pathname = "/ws-card";
+    url.search = "";
+    url.hash = "";
+    const newWS = new WebSocket(url);
+    setWS(newWS);
+    return () => newWS.close();
+  }, [setWS]);
 
   React.useEffect(() => {
     let scratching = false;
@@ -26,6 +31,7 @@ function App() {
     const mouseMoveTracker: EventListener = (e) => {
       if (scratching) {
         console.log(e);
+        ws?.send("dummy");
       }
     };
     canvasRef?.current?.addEventListener("mousedown", mouseDownListener);
