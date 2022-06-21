@@ -12,30 +12,44 @@ function App() {
     url.search = "";
     url.hash = "";
     const newWS = new WebSocket(url);
+    newWS.binaryType = "arraybuffer";
     setWS(newWS);
+    newWS.addEventListener("message", (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        // Uint8 is safe to decode network data
+        const data = new Uint8Array(event.data);
+        console.log(data);
+      } else {
+        console.log("text: " + event.data);
+      }
+    });
     return () => newWS.close();
   }, [setWS]);
 
   React.useEffect(() => {
     let scratching = false;
-    const mouseDownListener: EventListener = (e) => {
-      console.log(e);
+    const listenerToStartScratching = (e: MouseEvent) => {
       scratching = true;
     };
-    const mouseUpListener: EventListener = (e) => {
-      console.log(e);
+    const listenerToEndScratching = (e: MouseEvent) => {
       if (scratching) {
         scratching = false;
       }
     };
-    const mouseMoveTracker: EventListener = (e) => {
+    const mouseMoveTracker = (e: MouseEvent) => {
       if (scratching) {
-        console.log(e);
-        ws?.send("dummy");
+        const data = new DataView(new ArrayBuffer(2 * 2));
+        data.setUint16(0, e.offsetX);
+        data.setUint16(2, e.offsetY);
+        ws?.send(data.buffer);
       }
     };
-    canvasRef?.current?.addEventListener("mousedown", mouseDownListener);
-    canvasRef?.current?.addEventListener("mouseup", mouseUpListener);
+    canvasRef?.current?.addEventListener(
+      "mousedown",
+      listenerToStartScratching
+    );
+    canvasRef?.current?.addEventListener("mouseup", listenerToEndScratching);
+    canvasRef?.current?.addEventListener("mouseleave", listenerToEndScratching);
     canvasRef?.current?.addEventListener("mousemove", mouseMoveTracker);
   });
   return (
