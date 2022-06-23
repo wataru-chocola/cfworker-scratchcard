@@ -14,11 +14,19 @@ function App() {
     const newWS = new WebSocket(url);
     newWS.binaryType = "arraybuffer";
     setWS(newWS);
+    const ctx = canvasRef.current?.getContext("2d");
     newWS.addEventListener("message", (event) => {
       if (event.data instanceof ArrayBuffer) {
         // Uint8 is safe to decode network data
-        const data = new Uint8Array(event.data);
-        console.log(data);
+        const data = new ImageData(
+          new Uint8ClampedArray(event.data, 4),
+          11,
+          11
+        );
+        const view = new DataView(event.data);
+        const x = view.getUint16(0) - 5;
+        const y = view.getUint16(2) - 5;
+        ctx?.putImageData(data, x, y);
       } else {
         console.log("text: " + event.data);
       }

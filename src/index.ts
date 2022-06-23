@@ -17,7 +17,7 @@ export interface Env {
 }
 
 async function getScratchImage(env: Env, ctx: ExecutionContext) {
-  const imageName = "genbaneko.png";
+  const imageName = "genbaneko.png.bin";
 
   let imageData = await env.SCRATCHCARD_KV.get(imageName, {
     type: "arrayBuffer",
@@ -25,7 +25,7 @@ async function getScratchImage(env: Env, ctx: ExecutionContext) {
   if (imageData == null) {
     const image = await env.SCRATCHCARD_BUCKET.get(imageName);
     if (!image) {
-      return new Response("Object Not Found", { status: 404 });
+      throw Error("Object Not Found");
     }
     imageData = await image?.arrayBuffer();
     ctx.waitUntil(
@@ -33,7 +33,42 @@ async function getScratchImage(env: Env, ctx: ExecutionContext) {
     );
   }
 
-  return new Response(imageData);
+  return imageData;
+}
+
+async function scratchImage(imageData: ArrayBuffer, x: number, y: number) {
+  const CANVAS_WIDTH = 500;
+  const SIZE = 5;
+  const [origin_x, origin_y] = [x - SIZE, y - SIZE];
+  const rgba = new Uint8Array(imageData);
+
+  //const HEADER_SIZE = 2 + 2 + 2;
+  const HEADER_SIZE = 2 + 2;
+  const payload = new ArrayBuffer(HEADER_SIZE + (SIZE * 2 + 1) ** 2 * 4);
+  const payloadView = new DataView(payload);
+  payloadView.setUint16(0, origin_x);
+  payloadView.setUint16(2, origin_y);
+
+  const imagedata = new Uint8Array(payload, HEADER_SIZE);
+  for (let i = origin_x; i <= origin_x + SIZE * 2; i += 1) {
+    if (i < 0 || i > CANVAS_WIDTH - 1) {
+      continue;
+    }
+
+    for (let j = origin_y; j <= origin_y + SIZE * 2; j += 1) {
+      if (j < 0 || j > CANVAS_WIDTH - 1) {
+        continue;
+      }
+      const srcOffset = (500 * j + i) * 4;
+      const dstOffset = ((j - origin_y) * 11 + (i - origin_x)) * 4;
+      imagedata[dstOffset] = rgba[srcOffset];
+      imagedata[dstOffset + 1] = rgba[srcOffset + 1];
+      imagedata[dstOffset + 2] = rgba[srcOffset + 2];
+      imagedata[dstOffset + 3] = rgba[srcOffset + 3];
+    }
+  }
+
+  return payload;
 }
 
 export default {
@@ -42,10 +77,8 @@ export default {
     env: Env,
     ctx: ExecutionContext
   ): Promise<Response> {
-    if (request.url.includes("/api/card")) {
-      return await getScratchImage(env, ctx);
-    } else if (request.url.includes("/ws-card")) {
-      // websocket endpoint
+    // websocket endpoint
+    if (request.url.includes("/ws-card")) {
       const upgradeHeader = request.headers.get("Upgrade");
       if (!upgradeHeader || upgradeHeader !== "websocket") {
         return new Response("Expected Upgrade: websocket", { status: 426 });
@@ -53,9 +86,19 @@ export default {
       const webSocketPair = new WebSocketPair();
       const [client, server] = Object.values(webSocketPair);
 
+      const imageData = await getScratchImage(env, ctx);
       server.accept();
       server.addEventListener("message", (event) => {
-        console.log(event.data);
+        if (event.data instanceof ArrayBuffer) {
+          const view = new DataView(event.data);
+          const x = view.getUint16(0);
+          const y = view.getUint16(2);
+          scratchImage(imageData, x, y)
+            .then((payload) => server.send(payload))
+            .catch((e) => {
+              console.log(e);
+            });
+        }
       });
 
       return new Response(null, {
