@@ -17,23 +17,33 @@ function App() {
     const ctx = canvasRef.current?.getContext("2d");
     newWS.addEventListener("message", (event) => {
       if (event.data instanceof ArrayBuffer) {
-        const pixelDataSize = 11 * 11 * 4;
-        const msgSize = 4 + pixelDataSize;
+        console.log("+ received: ", event.data.byteLength);
+        const msgSize = 2 + 2 + 4;
+        const view = new DataView(event.data);
+
+        //const data = new Uint8ClampedArray(500 * 500 * 4);
         for (
           let offset = 0;
           offset < event.data.byteLength;
           offset += msgSize
         ) {
-          const data = new ImageData(
-            new Uint8ClampedArray(event.data, offset + 4, pixelDataSize),
-            11,
-            11
-          );
-          const view = new DataView(event.data);
-          const x = view.getUint16(offset + 0) - 5;
-          const y = view.getUint16(offset + 2) - 5;
-          ctx?.putImageData(data, x, y);
+          const x = view.getUint16(offset + 0);
+          const y = view.getUint16(offset + 2);
+          //const pixelOffset = (x + y * 500) * 4;
+          //data[pixelOffset] = view.getUint8(offset + 4);
+          //data[pixelOffset + 1] = view.getUint8(offset + 4 + 1);
+          //data[pixelOffset + 2] = view.getUint8(offset + 4 + 2);
+          //data[pixelOffset + 3] = view.getUint8(offset + 4 + 3);
+          const data = new Uint8ClampedArray(4);
+          data[0] = view.getUint8(offset + 4);
+          data[1] = view.getUint8(offset + 4 + 1);
+          data[2] = view.getUint8(offset + 4 + 2);
+          data[3] = view.getUint8(offset + 4 + 3);
+          const image = new ImageData(data, 1, 1);
+          ctx?.putImageData(image, x, y);
         }
+        //const image = new ImageData(data, 500, 500);
+        //ctx?.putImageData(image, 0, 0);
       } else {
         console.log("text: " + event.data);
       }
@@ -47,7 +57,6 @@ function App() {
   React.useEffect(() => {
     let scratching = false;
     let reqs: Array<[number, number]> = [];
-    const cached = new Uint8Array(500 * 500);
     const listenerToStartScratching = (e: MouseEvent) => {
       scratching = true;
     };
@@ -60,10 +69,7 @@ function App() {
       if (scratching) {
         // FYI: https://developer.mozilla.org/ja/docs/Web/API/PointerEvent/getCoalescedEvents
         for (const e of event.getCoalescedEvents()) {
-          if (cached[e.offsetX + e.offsetY * 500] === 0) {
-            reqs.push([e.offsetX, e.offsetY]);
-            cached[e.offsetX + e.offsetY * 500] = 1;
-          }
+          reqs.push([e.offsetX, e.offsetY]);
         }
       }
     };
