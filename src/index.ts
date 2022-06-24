@@ -36,13 +36,12 @@ async function getScratchImage(env: Env, ctx: ExecutionContext) {
   return imageData;
 }
 
-async function scratchImage(imageData: ArrayBuffer, x: number, y: number) {
+async function scratchPoint(imageData: ArrayBuffer, x: number, y: number) {
   const CANVAS_WIDTH = 500;
   const SIZE = 5;
   const [origin_x, origin_y] = [x - SIZE, y - SIZE];
   const rgba = new Uint8Array(imageData);
 
-  //const HEADER_SIZE = 2 + 2 + 2;
   const HEADER_SIZE = 2 + 2;
   const payload = new ArrayBuffer(HEADER_SIZE + (SIZE * 2 + 1) ** 2 * 4);
   const payloadView = new DataView(payload);
@@ -71,6 +70,25 @@ async function scratchImage(imageData: ArrayBuffer, x: number, y: number) {
   return payload;
 }
 
+async function scratchPoints(
+  imageData: ArrayBuffer,
+  points: Array<[number, number]>
+) {
+  const SIZE = 5;
+  const HEADER_SIZE = 2 + 2;
+  const payload = new ArrayBuffer(
+    (HEADER_SIZE + (SIZE * 2 + 1) ** 2 * 4) * points.length
+  );
+  const view = new Uint8Array(payload);
+  for (let i = 0; i < points.length; i++) {
+    const tmp = new Uint8Array(
+      await scratchPoint(imageData, points[i][0], points[i][1])
+    );
+    view.set(tmp, (HEADER_SIZE + (SIZE * 2 + 1) ** 2 * 4) * i);
+  }
+  return payload;
+}
+
 export default {
   async fetch(
     request: Request,
@@ -91,9 +109,13 @@ export default {
       server.addEventListener("message", (event) => {
         if (event.data instanceof ArrayBuffer) {
           const view = new DataView(event.data);
-          const x = view.getUint16(0);
-          const y = view.getUint16(2);
-          scratchImage(imageData, x, y)
+          const reqPoints: Array<[number, number]> = [];
+          for (let i = 0; i < view.byteLength; i += 4) {
+            const x = view.getUint16(i + 0);
+            const y = view.getUint16(i + 2);
+            reqPoints.push([x, y]);
+          }
+          scratchPoints(imageData, reqPoints)
             .then((payload) => server.send(payload))
             .catch((e) => {
               console.log(e);
