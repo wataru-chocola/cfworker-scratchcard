@@ -17,10 +17,16 @@ export interface Env {
 }
 
 const CANVAS_LENGTH = 500;
-const SCRATCH_SIZE = 10;
+const SCRATCH_SIZE = 15;
 
 async function getScratchImage(env: Env, ctx: ExecutionContext) {
-  const imageName = "genbaneko.png.bin";
+  const images = await env.SCRATCHCARD_BUCKET.list();
+  if (images.objects.length === 0) {
+    throw Error("Object Not Found");
+  }
+  const image =
+    images.objects[Math.floor(Math.random() * images.objects.length)];
+  const imageName = image.key;
 
   let imageData = await env.SCRATCHCARD_KV.get(imageName, {
     type: "arrayBuffer",
@@ -164,7 +170,6 @@ export default {
       server.accept();
       server.addEventListener("message", (event) => {
         if (event.data instanceof ArrayBuffer) {
-          console.log("+ received: ", event.data.byteLength);
           const view = new DataView(event.data);
           const reqPoints: Array<[number, number]> = [];
           for (let i = 0; i < view.byteLength; i += 4) {
@@ -175,7 +180,6 @@ export default {
           scratchPoints(imageData, reqPoints)
             .then((payload) => {
               server.send(payload);
-              console.log("+ response: ", payload.byteLength);
             })
             .catch((e) => {
               console.log(e);
