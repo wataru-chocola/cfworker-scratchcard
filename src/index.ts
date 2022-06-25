@@ -161,22 +161,17 @@ export default {
       const [client, server] = Object.values(webSocketPair);
 
       const imageData = await getScratchImage(env, ctx);
-      let lastPoint: [number, number] | null = null;
       server.accept();
       server.addEventListener("message", (event) => {
         if (event.data instanceof ArrayBuffer) {
           console.log("+ received: ", event.data.byteLength);
           const view = new DataView(event.data);
           const reqPoints: Array<[number, number]> = [];
-          if (lastPoint) {
-            reqPoints.push(lastPoint);
-          }
           for (let i = 0; i < view.byteLength; i += 4) {
             const x = view.getUint16(i + 0);
             const y = view.getUint16(i + 2);
             reqPoints.push([x, y]);
           }
-          lastPoint = reqPoints[reqPoints.length - 1];
           scratchPoints(imageData, reqPoints)
             .then((payload) => {
               server.send(payload);

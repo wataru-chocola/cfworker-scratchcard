@@ -45,21 +45,41 @@ function App() {
 
   React.useEffect(() => {
     let scratching = false;
-    let reqs: Array<[number, number]> = [];
+    let lastPoint: [number, number] | null = null;
+
+    const sendReqs = (reqs: [number, number][]) => {
+      if (reqs.length === 0) return;
+
+      if (lastPoint) {
+        reqs.unshift(lastPoint);
+      }
+      const data = new DataView(new ArrayBuffer(2 * 2 * reqs.length));
+      for (let i = 0; i < reqs.length; i++) {
+        data.setUint16(2 * 2 * i + 0, reqs[i][0]);
+        data.setUint16(2 * 2 * i + 2, reqs[i][1]);
+      }
+      ws?.send(data.buffer);
+    };
+
     const listenerToStartScratching = (e: MouseEvent) => {
       scratching = true;
+      sendReqs([[e.offsetX, e.offsetY]]);
     };
     const listenerToEndScratching = (e: MouseEvent) => {
       if (scratching) {
+        sendReqs([[e.offsetX, e.offsetY]]);
         scratching = false;
+        lastPoint = null;
       }
     };
     const pointerTracker = (event: PointerEvent) => {
       if (scratching) {
+        const reqs: Array<[number, number]> = [];
         // FYI: https://developer.mozilla.org/ja/docs/Web/API/PointerEvent/getCoalescedEvents
         for (const e of event.getCoalescedEvents()) {
           reqs.push([e.offsetX, e.offsetY]);
         }
+        sendReqs(reqs);
       }
     };
     canvasRef?.current?.addEventListener(
@@ -68,19 +88,6 @@ function App() {
     );
     document.addEventListener("mouseup", listenerToEndScratching);
     canvasRef?.current?.addEventListener("pointermove", pointerTracker);
-
-    const timerId = setInterval(() => {
-      if (reqs.length > 0) {
-        const data = new DataView(new ArrayBuffer(2 * 2 * reqs.length));
-        for (let i = 0; i < reqs.length; i++) {
-          data.setUint16(2 * 2 * i + 0, reqs[i][0]);
-          data.setUint16(2 * 2 * i + 2, reqs[i][1]);
-        }
-        ws?.send(data.buffer);
-        reqs = [];
-      }
-    }, 5);
-    return () => clearInterval(timerId);
   });
   return (
     <div className="App">
