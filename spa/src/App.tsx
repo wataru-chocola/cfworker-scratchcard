@@ -3,7 +3,17 @@ import "./App.css";
 
 function App() {
   const [ws, setWS] = React.useState<WebSocket>();
+  const [worker, setWorker] = React.useState<Worker>();
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
+  React.useEffect(() => {
+    const worker = new Worker(new URL("./worker.ts", import.meta.url));
+    // Only Chrome supports this method.
+    // @ts-ignore
+    const offscreenCanvas = canvasRef.current?.transferControlToOffscreen();
+    worker.postMessage({ canvas: offscreenCanvas }, [offscreenCanvas]);
+    setWorker(worker);
+  }, [setWorker]);
 
   React.useEffect(() => {
     const url = new URL(window.location.href);
@@ -14,28 +24,28 @@ function App() {
     const newWS = new WebSocket(url);
     newWS.binaryType = "arraybuffer";
     setWS(newWS);
-    const ctx = canvasRef.current?.getContext("2d");
-    newWS.addEventListener("message", (event) => {
-      if (event.data instanceof ArrayBuffer) {
-        // Uint8 is safe to decode network data
-        const data = new ImageData(
-          new Uint8ClampedArray(event.data, 4),
-          11,
-          11
-        );
-        const view = new DataView(event.data);
-        const x = view.getUint16(0) - 5;
-        const y = view.getUint16(2) - 5;
-        ctx?.putImageData(data, x, y);
-      } else {
-        console.log("text: " + event.data);
-      }
-    });
-    return () => newWS.close();
+
+    return () => {
+      newWS.close();
+    };
   }, [setWS]);
 
   React.useEffect(() => {
+    if (ws && worker) {
+      ws.addEventListener("message", (event) => {
+        if (event.data instanceof ArrayBuffer) {
+          console.log("+ received: ", event.data.byteLength);
+          worker?.postMessage({ imageData: event.data });
+        } else {
+          console.log("text: " + event.data);
+        }
+      });
+    }
+  }, [ws, worker]);
+
+  React.useEffect(() => {
     let scratching = false;
+    let reqs: Array<[number, number]> = [];
     const listenerToStartScratching = (e: MouseEvent) => {
       scratching = true;
     };
@@ -44,21 +54,33 @@ function App() {
         scratching = false;
       }
     };
-    const mouseMoveTracker = (e: MouseEvent) => {
+    const pointerTracker = (event: PointerEvent) => {
       if (scratching) {
-        const data = new DataView(new ArrayBuffer(2 * 2));
-        data.setUint16(0, e.offsetX);
-        data.setUint16(2, e.offsetY);
-        ws?.send(data.buffer);
+        // FYI: https://developer.mozilla.org/ja/docs/Web/API/PointerEvent/getCoalescedEvents
+        for (const e of event.getCoalescedEvents()) {
+          reqs.push([e.offsetX, e.offsetY]);
+        }
       }
     };
     canvasRef?.current?.addEventListener(
       "mousedown",
       listenerToStartScratching
     );
-    canvasRef?.current?.addEventListener("mouseup", listenerToEndScratching);
-    canvasRef?.current?.addEventListener("mouseleave", listenerToEndScratching);
-    canvasRef?.current?.addEventListener("mousemove", mouseMoveTracker);
+    document.addEventListener("mouseup", listenerToEndScratching);
+    canvasRef?.current?.addEventListener("pointermove", pointerTracker);
+
+    const timerId = setInterval(() => {
+      if (reqs.length > 0) {
+        const data = new DataView(new ArrayBuffer(2 * 2 * reqs.length));
+        for (let i = 0; i < reqs.length; i++) {
+          data.setUint16(2 * 2 * i + 0, reqs[i][0]);
+          data.setUint16(2 * 2 * i + 2, reqs[i][1]);
+        }
+        ws?.send(data.buffer);
+        reqs = [];
+      }
+    }, 5);
+    return () => clearInterval(timerId);
   });
   return (
     <div className="App">
