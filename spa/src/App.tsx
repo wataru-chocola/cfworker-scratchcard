@@ -3,7 +3,17 @@ import "./App.css";
 
 function App() {
   const [ws, setWS] = React.useState<WebSocket>();
+  const [worker, setWorker] = React.useState<Worker>();
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
+  React.useEffect(() => {
+    const worker = new Worker(new URL("./worker.ts", import.meta.url));
+    // Only Chrome supports this method.
+    // @ts-ignore
+    const offscreenCanvas = canvasRef.current?.transferControlToOffscreen();
+    worker.postMessage({ canvas: offscreenCanvas }, [offscreenCanvas]);
+    setWorker(worker);
+  }, [setWorker]);
 
   React.useEffect(() => {
     const url = new URL(window.location.href);
@@ -14,45 +24,24 @@ function App() {
     const newWS = new WebSocket(url);
     newWS.binaryType = "arraybuffer";
     setWS(newWS);
-    const ctx = canvasRef.current?.getContext("2d");
-    newWS.addEventListener("message", (event) => {
-      if (event.data instanceof ArrayBuffer) {
-        console.log("+ received: ", event.data.byteLength);
-        const msgSize = 2 + 2 + 4;
-        const view = new DataView(event.data);
-
-        //const data = new Uint8ClampedArray(500 * 500 * 4);
-        for (
-          let offset = 0;
-          offset < event.data.byteLength;
-          offset += msgSize
-        ) {
-          const x = view.getUint16(offset + 0);
-          const y = view.getUint16(offset + 2);
-          //const pixelOffset = (x + y * 500) * 4;
-          //data[pixelOffset] = view.getUint8(offset + 4);
-          //data[pixelOffset + 1] = view.getUint8(offset + 4 + 1);
-          //data[pixelOffset + 2] = view.getUint8(offset + 4 + 2);
-          //data[pixelOffset + 3] = view.getUint8(offset + 4 + 3);
-          const data = new Uint8ClampedArray(4);
-          data[0] = view.getUint8(offset + 4);
-          data[1] = view.getUint8(offset + 4 + 1);
-          data[2] = view.getUint8(offset + 4 + 2);
-          data[3] = view.getUint8(offset + 4 + 3);
-          const image = new ImageData(data, 1, 1);
-          ctx?.putImageData(image, x, y);
-        }
-        //const image = new ImageData(data, 500, 500);
-        //ctx?.putImageData(image, 0, 0);
-      } else {
-        console.log("text: " + event.data);
-      }
-    });
 
     return () => {
       newWS.close();
     };
   }, [setWS]);
+
+  React.useEffect(() => {
+    if (ws && worker) {
+      ws.addEventListener("message", (event) => {
+        if (event.data instanceof ArrayBuffer) {
+          console.log("+ received: ", event.data.byteLength);
+          worker?.postMessage({ imageData: event.data });
+        } else {
+          console.log("text: " + event.data);
+        }
+      });
+    }
+  }, [ws, worker]);
 
   React.useEffect(() => {
     let scratching = false;
@@ -90,7 +79,7 @@ function App() {
         ws?.send(data.buffer);
         reqs = [];
       }
-    }, 10);
+    }, 5);
     return () => clearInterval(timerId);
   });
   return (
