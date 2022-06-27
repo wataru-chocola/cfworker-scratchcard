@@ -19,7 +19,11 @@ export interface Env {
 const CANVAS_LENGTH = 500;
 const SCRATCH_SIZE = 15;
 
-async function getScratchImage(env: Env, ctx: ExecutionContext) {
+async function getScratchImage(
+  request: Request, // XXX: to prevent cfworkers from caching this func invocation
+  env: Env,
+  ctx: ExecutionContext
+) {
   const images = await env.SCRATCHCARD_BUCKET.list();
   if (images.objects.length === 0) {
     throw Error("Object Not Found");
@@ -120,7 +124,8 @@ function calcCoordinates(points: Array<[number, number]>) {
   return coordinates;
 }
 
-async function scratchPoints(
+//async function scratchPoints(
+function scratchPoints(
   imageData: ArrayBuffer,
   points: Array<[number, number]>
 ) {
@@ -166,7 +171,7 @@ export default {
       const webSocketPair = new WebSocketPair();
       const [client, server] = Object.values(webSocketPair);
 
-      const imageData = await getScratchImage(env, ctx);
+      const imageData = await getScratchImage(request, env, ctx);
       server.accept();
       server.addEventListener("message", (event) => {
         if (event.data instanceof ArrayBuffer) {
@@ -177,13 +182,7 @@ export default {
             const y = view.getUint16(i + 2);
             reqPoints.push([x, y]);
           }
-          scratchPoints(imageData, reqPoints)
-            .then((payload) => {
-              server.send(payload);
-            })
-            .catch((e) => {
-              console.log(e);
-            });
+          server.send(scratchPoints(imageData!, reqPoints));
         }
       });
 
