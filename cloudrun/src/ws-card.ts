@@ -21,7 +21,7 @@ export function createWSS(server: http.Server, imagedir: string) {
     const imageData = await fsPromise.readFile(imageFile);
     const arrayBuf = imageData.buffer.slice(
       imageData.byteOffset,
-      imageData.byteOffset + imageData.byteLength - 1
+      imageData.byteOffset + imageData.byteLength
     );
     return arrayBuf;
   }
