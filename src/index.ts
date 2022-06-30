@@ -31,6 +31,7 @@ async function getScratchImage(
   const image =
     images.objects[Math.floor(Math.random() * images.objects.length)];
   const imageName = image.key;
+  console.log("+ chosen image: ", imageName);
 
   let imageData = await env.SCRATCHCARD_KV.get(imageName, {
     type: "arrayBuffer",
